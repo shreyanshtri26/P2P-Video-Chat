@@ -58,14 +58,21 @@ let controlsHideTimer;
 let previewStream, previewAudioCtx, previewAnalyser, previewAnimFrame;
 
 // ── ICE Servers ───────────────────────────────────────────
-const iceServers = {
-  iceServers: [
+const getIceServers = () => {
+  const baseServers = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    { urls: `stun:${LOCAL_IP_ADDRESS}:3478` },
-    { urls: `turn:${LOCAL_IP_ADDRESS}:3478`, username: "username", credential: "password" }
-  ]
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" }
+  ];
+  if (window.location.port === "8080") {
+    baseServers.push({ urls: `stun:${LOCAL_IP_ADDRESS}:3478` });
+    baseServers.push({ urls: `turn:${LOCAL_IP_ADDRESS}:3478`, username: "username", credential: "password" });
+  }
+  return { iceServers: baseServers };
 };
+const iceServers = getIceServers();
 
 // ── Stream Constraints ────────────────────────────────────
 const buildConstraints = (audioDeviceId, videoDeviceId) => ({

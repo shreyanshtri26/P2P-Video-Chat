@@ -34,6 +34,20 @@
    - Enter a secure room identifier.
    - Repeat from a secondary window/tab using identical parameters.
 
+### ⚠️ Testing with Mobile/Other Laptops (Local Network)
+Due to WebRTC security policies, **camera and microphone access are blocked on non-secure origins** (`http://`). The only local exemptions are `localhost` and `127.0.0.1`. 
+
+If connecting via your local IP (`http://<YOUR_LOCAL_IP>:8080`):
+- **Option A**: Toggle secure origins manually on mobile:
+  1. Open Chrome on your smartphone.
+  2. Visit `chrome://flags/#unsafely-treat-insecure-origin-as-secure`.
+  3. Add `http://<YOUR_LOCAL_IP>:8080` to the whitelist, switch to Enabled, and reboot.
+- **Option B**: Run an automated secure proxy via **ngrok**:
+  ```bash
+  ngrok http 8080
+  ```
+- **Option C**: Visit deployed infrastructure directly (e.g. Render deployments) that execute under SSL defaults natively.
+
 ---
  
 

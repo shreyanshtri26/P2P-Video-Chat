@@ -679,8 +679,13 @@ body {
   padding: 10px 20px;
   border-radius: 10px;
   font-size: 14px;
-  z-index: 100;
+  z-index: 99999;
   backdrop-filter: blur(8px);
+}
+:fullscreen .toast-notification,
+:-webkit-full-screen .toast-notification {
+  z-index: 99999 !important;
+}
   animation: toast-in 0.3s ease;
   display: flex;
   align-items: center;

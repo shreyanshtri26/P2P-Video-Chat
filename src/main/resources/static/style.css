@@ -451,7 +451,51 @@ body {
   to   { border-color: var(--green); }
 }
 
+/* ── Server Info Badge (lobby) ────────────────────────── */
+.server-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.2px;
+  transition: color 0.3s;
+}
+
+.server-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #555;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.server-badge.online  { color: var(--text); }
+.server-badge.online .server-dot { background: var(--green); box-shadow: 0 0 6px rgba(52,168,83,0.5); }
+.server-badge.offline .server-dot { background: var(--red); }
+
+/* ── Server Chip (call topbar) ────────────────────────── */
+.server-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
 /* ── Top Bar ───────────────────────────────────────────── */
+
 .call-topbar {
   position: absolute;
   top: 0;

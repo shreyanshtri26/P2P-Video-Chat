@@ -595,4 +595,44 @@ window.addEventListener("DOMContentLoaded", () => {
   roomNameInput.addEventListener("keydown", e => {
     if (e.key === "Enter") btnConnect.click();
   });
+  fetchServerInfo();
 });
+
+// ═══════════════════════════════════════════════════════════
+//  SERVER INFO
+// ═══════════════════════════════════════════════════════════
+
+async function fetchServerInfo() {
+  const badge    = document.getElementById("serverBadge");
+  const badgeText= document.getElementById("serverBadgeText");
+  const chip     = document.getElementById("serverChip");
+  const chipText = document.getElementById("serverChipText");
+
+  try {
+    const res  = await fetch("/api/server-info");
+    const data = await res.json();
+
+    const region  = data.region  || "unknown";
+    const service = data.service || window.location.host;
+    const port    = data.signalingPort;
+
+    const label = region !== "local"
+      ? `${service} · ${region}`
+      : `localhost · port ${port}`;
+
+    // Lobby badge
+    badgeText.textContent = label;
+    badge.classList.add("online");
+
+    // Call topbar chip
+    chipText.textContent = label;
+    chip.classList.remove("d-none");
+
+  } catch {
+    if (badge) {
+      badge.classList.add("offline");
+      document.getElementById("serverBadgeText").textContent = "Server unreachable";
+    }
+  }
+}
+

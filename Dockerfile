@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y nginx gettext && rm -rf /var/lib/apt/li
 COPY --from=build /app/target/*.jar app.jar
 
 # Copy Nginx Config
-COPY nginx/nginx-railway.conf /etc/nginx/sites-available/default
+COPY nginx/nginx-render.conf /etc/nginx/sites-available/default
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh

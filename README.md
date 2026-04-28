@@ -34,11 +34,13 @@
 
 ---
 
-## 🚀 Deployment Guide (Railway)
+## 🚀 Deployment Guide (Render)
 
-As **Voceo** utilizes a dedicated WebSocket server (`netty-socketio`) parallel to standard Spring APIs, utilizing **Railway's Native Docker Compose capability** is the simplest distribution pipeline.
+**Voceo** is configured for quick one-click deployments via **Render Blueprints**. 
 
 ### Deployment Instructions:
-1. Connect this GitHub repository directly to your [Railway Account](https://railway.app).
-2. Set up a new project mapped from the `main` branch.
-3. Railway will autonomously read the `docker-compose.yml`, deploying the application containers smoothly.
+1. Push this code to your GitHub repository.
+2. Sign in to your [Render Dashboard](https://dashboard.render.com).
+3. Click on **New +** -> **Blueprint**.
+4. Link this repository. Render will automatically parse the `render.yaml` file to deploy `voceo-p2p.onrender.com`.
+

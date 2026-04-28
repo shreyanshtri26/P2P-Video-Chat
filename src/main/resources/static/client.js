@@ -12,6 +12,7 @@ const btnToggleVideo   = $("toggleVideo");
 const btnToggleAudio   = $("toggleAudio");
 const btnFullscreen    = $("btnFullscreen");
 const btnFlip          = $("btnFlip");
+const btnScreenShare   = $("btnScreenShare");
 const divRoomConfig    = $("roomConfig");
 const roomDiv          = $("roomDiv");
 const roomNameInput    = $("roomName");
@@ -23,7 +24,6 @@ const localAudioRing   = $("localAudioRing");
 const callTopbar       = $("callTopbar");
 const callControls     = $("callControls");
 const callTimer        = $("callTimer");
-const callRoomLabel    = $("callRoomLabel");
 const ctrlRoomName     = $("ctrlRoomName");
 const roomLabel        = $("roomLabel");
 const connBadge        = $("connectionBadge");
@@ -463,6 +463,65 @@ btnFlip.addEventListener("click", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+//  SCREEN SHARE
+// ═══════════════════════════════════════════════════════════
+
+let screenSharing = false;
+let screenStream = null;
+
+btnScreenShare.addEventListener("click", async () => {
+  if (!screenSharing) {
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack = screenStream.getVideoTracks()[0];
+
+      peers.forEach((pc, peerId) => {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === "video");
+        if (videoSender) {
+          videoSender.replaceTrack(screenTrack);
+        }
+      });
+
+      localVideo.srcObject = screenStream;
+      btnScreenShare.className = "ctrl-btn ctrl-active";
+      screenSharing = true;
+
+      screenTrack.onended = () => {
+        stopScreenSharing();
+      };
+
+      showToast("Screen sharing started", "bi-display");
+    } catch (err) {
+      console.warn("Screen share cancelled or failed", err);
+    }
+  } else {
+    stopScreenSharing();
+  }
+});
+
+function stopScreenSharing() {
+  if (screenStream) {
+    screenStream.getTracks().forEach(t => t.stop());
+    screenStream = null;
+  }
+  const videoTrack = localStream ? localStream.getVideoTracks()[0] : null;
+  if (videoTrack) {
+    peers.forEach((pc, peerId) => {
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === "video");
+      if (videoSender) {
+        videoSender.replaceTrack(videoTrack);
+      }
+    });
+  }
+  localVideo.srcObject = localStream;
+  btnScreenShare.className = "ctrl-btn ctrl-neutral";
+  screenSharing = false;
+  showToast("Screen sharing stopped", "bi-display");
+}
+
+// ═══════════════════════════════════════════════════════════
 //  MIC / CAM TOGGLE
 // ═══════════════════════════════════════════════════════════
 
@@ -536,7 +595,6 @@ btnConnect.onclick = () => {
   const val = roomNameInput.value.trim();
   if (!val) { showToast("Please enter a room name", "bi-exclamation-circle"); return; }
   roomName = val;
-  callRoomLabel.textContent = roomName;
   ctrlRoomName.textContent  = roomName;
   roomLabel.textContent     = roomName;
   stopPreview();
@@ -805,11 +863,14 @@ on("chatMessage", (payload) => {
   chatMessages.appendChild(msgEl);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 
+  if (!isMe) {
+    showToast(`${sender}: ${payload.message}`, "bi-chat-dots-fill");
+  }
+
   if (!chatOpen) {
     unreadCount++;
     chatBadge.textContent = unreadCount;
     chatBadge.classList.remove("d-none");
-    showToast("New message received", "bi-chat-dots-fill");
   }
 });
 

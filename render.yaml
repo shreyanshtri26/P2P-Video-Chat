@@ -1,7 +1,7 @@
 # Render Deployment Blueprint for Voceo
 services:
   - type: web
-    name: voceo-chat # This will give voceo-chat.onrender.com
+    name: voceo-p2p # This will give voceo-p2p.onrender.com
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free

@@ -2,8 +2,6 @@
 FROM maven:3.8.4-jdk-11-slim AS build
 WORKDIR /app
 COPY pom.xml .
-RUN mvn dependency:go-offline
-
 COPY src/ /app/src/
 RUN mvn clean package -DskipTests
 
@@ -21,6 +19,7 @@ COPY nginx/nginx-render.conf /etc/nginx/sites-available/default
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
+RUN sed -i -e 's/\r$//' /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 80

@@ -11,6 +11,9 @@ FROM eclipse-temurin:11-jdk
 # Install Nginx and gettext (for envsubst)
 RUN apt-get update && apt-get install -y nginx gettext && rm -rf /var/lib/apt/lists/*
 
+# Symlink Nginx logs to stdout/stderr
+RUN ln -sf /dev/stdout /var/log/nginx/access.log && ln -sf /dev/stderr /var/log/nginx/error.log
+
 # Copy Spring Boot Jar
 COPY --from=build /app/target/*.jar app.jar
 

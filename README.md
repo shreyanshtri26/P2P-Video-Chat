@@ -33,14 +33,7 @@
    - Repeat from a secondary window/tab using identical parameters.
 
 ---
+ 
 
-## 🚀 Deployment Guide (Render)
 
-**Voceo** is configured for quick one-click deployments via **Render Blueprints**. 
-
-### Deployment Instructions:
-1. Push this code to your GitHub repository.
-2. Sign in to your [Render Dashboard](https://dashboard.render.com).
-3. Click on **New +** -> **Blueprint**.
-4. Link this repository. Render will automatically parse the `render.yaml` file to deploy `voceo-p2p.onrender.com`.
 

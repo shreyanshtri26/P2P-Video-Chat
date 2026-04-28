@@ -120,6 +120,17 @@ public class SocketHandler {
     printLog("onCandidate", client, room);
   }
 
+  @OnEvent("chatMessage")
+  public void onChatMessage(SocketIOClient client, Map<String, Object> payload) {
+    String room = (String) payload.get("room");
+    payload.put("fromId", client.getSessionId().toString());
+    payload.put("timestamp", System.currentTimeMillis());
+    if (room != null) {
+      server.getRoomOperations(room).sendEvent("chatMessage", payload);
+    }
+    printLog("chatMessage", client, room);
+  }
+
   @OnEvent("leaveRoom")
   public void onLeaveRoom(SocketIOClient client, String room) {
     client.leaveRoom(room);

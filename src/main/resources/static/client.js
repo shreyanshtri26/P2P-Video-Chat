@@ -46,6 +46,11 @@ let localMirrored = true;
 let micEnabled  = true;
 let camEnabled  = true;
 
+// ── Pinning & Chat State ──────────────────────────────────
+let pinnedElement = null;
+let chatOpen = false;
+let unreadCount = 0;
+
 // ── Non-call state ────────────────────────────────────────
 let audioContext, analyser, audioData, animFrameId;
 let callStartTime, timerInterval;
@@ -93,8 +98,60 @@ const on = (name, cb) => socket.on(name, cb);
 //  VIDEO GRID HELPERS
 // ═══════════════════════════════════════════════════════════
 
+function pinElement(el) {
+  const roomDiv = $("roomDiv");
+  
+  if (pinnedElement === el) {
+    unpinAll();
+    return;
+  }
+  
+  unpinAll();
+  pinnedElement = el;
+  roomDiv.classList.add("has-pinned");
+  el.classList.add("is-pinned");
+  
+  const allTiles = document.querySelectorAll(".video-tile");
+  const localPip = $("localPip");
+  
+  let miniPips = [];
+  allTiles.forEach(tile => {
+    if (tile !== el) {
+      tile.classList.add("mini-pip");
+      miniPips.push(tile);
+    }
+  });
+  
+  if (localPip !== el) {
+    localPip.classList.add("mini-pip");
+    miniPips.push(localPip);
+  }
+  
+  miniPips.forEach((pip, index) => {
+    pip.style.right = `${20 + index * 190}px`;
+    pip.style.bottom = "110px";
+    pip.style.left = "auto";
+    pip.style.top = "auto";
+  });
+}
+
+function unpinAll() {
+  const roomDiv = $("roomDiv");
+  roomDiv.classList.remove("has-pinned");
+  
+  document.querySelectorAll(".is-pinned").forEach(el => el.classList.remove("is-pinned"));
+  document.querySelectorAll(".mini-pip").forEach(el => {
+    el.classList.remove("mini-pip");
+    el.style.right = "";
+    el.style.bottom = "";
+    el.style.left = "";
+    el.style.top = "";
+  });
+  
+  pinnedElement = null;
+}
+
 function addVideoTile(peerId, stream) {
-  // Avoid duplicate tiles
   if ($("tile-" + peerId)) return;
 
   const tile = document.createElement("div");
@@ -109,12 +166,21 @@ function addVideoTile(peerId, stream) {
 
   const label = document.createElement("div");
   label.className = "tile-label";
-  label.textContent = "Peer";
+  label.textContent = `Peer (${peerId.substring(0, 4)})`;
 
   tile.appendChild(video);
   tile.appendChild(label);
+  
+  // Wire pinning click
+  tile.addEventListener("click", () => pinElement(tile));
+  
   videoGrid.appendChild(tile);
   updateGrid();
+
+  // If a video is pinned, update layouts for the newly joined peer
+  if (pinnedElement) {
+    pinElement(pinnedElement); 
+  }
 
   peerPlaceholder.classList.add("d-none");
   updateConnectionBadge();
@@ -122,10 +188,22 @@ function addVideoTile(peerId, stream) {
 
 function removeVideoTile(peerId) {
   const tile = $("tile-" + peerId);
-  if (tile) tile.remove();
+  if (tile) {
+    if (pinnedElement === tile) {
+      unpinAll();
+    }
+    tile.remove();
+  }
   updateGrid();
+  
+  if (pinnedElement) {
+    // Re-adjust remaining mini-pips
+    pinElement(pinnedElement);
+  }
+
   if (videoGrid.children.length === 0) {
     peerPlaceholder.classList.remove("d-none");
+    unpinAll();
   }
   updateConnectionBadge();
 }
@@ -560,9 +638,12 @@ on("full", () => {
 (function makeDraggable() {
   const pip = $("localPip");
   let dragging = false, ox, oy;
+  let startX = 0, startY = 0;
 
   pip.addEventListener("mousedown", e => {
     dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
     const r = pip.getBoundingClientRect();
     ox = e.clientX - r.left;
     oy = e.clientY - r.top;
@@ -580,9 +661,16 @@ on("full", () => {
     pip.style.top  = y + "px";
   });
 
-  document.addEventListener("mouseup", () => {
-    dragging = false;
-    pip.style.cursor = "grab";
+  document.addEventListener("mouseup", e => {
+    if (dragging) {
+      dragging = false;
+      pip.style.cursor = "grab";
+      
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dist < 5) {
+        pinElement(pip);
+      }
+    }
   });
 })();
 
@@ -616,9 +704,19 @@ async function fetchServerInfo() {
     const service = data.service || window.location.host;
     const port    = data.signalingPort;
 
-    const label = region !== "local"
+    let label = region !== "local"
       ? `${service} · ${region}`
-      : `localhost · port ${port}`;
+      : `${window.location.hostname}`;
+
+    try {
+      const locRes = await fetch("https://ipapi.co/json/");
+      const locData = await locRes.json();
+      if (locData.city) {
+        label = `${locData.city}, ${locData.country_code || locData.country_name}`;
+      }
+    } catch (e) {
+      console.warn("Could not determine physical location:", e);
+    }
 
     // Lobby badge
     badgeText.textContent = label;
@@ -635,4 +733,76 @@ async function fetchServerInfo() {
     }
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+//  CHAT FEATURE
+// ═══════════════════════════════════════════════════════════
+
+const chatPanel    = $("chatPanel");
+const toggleChat   = $("toggleChat");
+const closeChat    = $("closeChat");
+const chatInput    = $("chatInput");
+const sendChatBtn  = $("sendChatBtn");
+const chatMessages = $("chatMessages");
+const chatBadge    = $("chatBadge");
+
+toggleChat.addEventListener("click", () => {
+  chatOpen = !chatOpen;
+  chatPanel.classList.toggle("hidden", !chatOpen);
+  if (chatOpen) {
+    unreadCount = 0;
+    chatBadge.textContent = "0";
+    chatBadge.classList.add("d-none");
+    chatInput.focus();
+  }
+});
+
+closeChat.addEventListener("click", () => {
+  chatOpen = false;
+  chatPanel.classList.add("hidden");
+});
+
+function sendChatMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+  
+  socket.emit("chatMessage", {
+    room: roomName,
+    message: text
+  });
+  
+  chatInput.value = "";
+}
+
+sendChatBtn.addEventListener("click", sendChatMessage);
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") sendChatMessage();
+});
+
+on("chatMessage", (payload) => {
+  const isMe = payload.fromId === myId;
+  const msgEl = document.createElement("div");
+  msgEl.className = `chat-msg ${isMe ? "me" : ""}`;
+  
+  const time = new Date(payload.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sender = isMe ? "You" : `Peer (${payload.fromId.substring(0, 4)})`;
+  
+  msgEl.innerHTML = `
+    <div class="chat-msg-header">
+      <span class="chat-msg-sender">${sender}</span>
+      <span class="chat-msg-time">${time}</span>
+    </div>
+    <div class="chat-msg-text">${payload.message}</div>
+  `;
+  
+  chatMessages.appendChild(msgEl);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  if (!chatOpen) {
+    unreadCount++;
+    chatBadge.textContent = unreadCount;
+    chatBadge.classList.remove("d-none");
+    showToast("New message received", "bi-chat-dots-fill");
+  }
+});
 

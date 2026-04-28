@@ -200,6 +200,18 @@
         </div>
       </div>
 
+        <!-- Chat Toggle -->
+        <div class="ctrl-btn-wrap">
+          <button id="toggleChat" class="ctrl-btn ctrl-neutral" title="Toggle Chat">
+            <span class="ctrl-btn-inner">
+              <i id="chatIcon" class="bi bi-chat-dots-fill"></i>
+              <span id="chatBadge" class="chat-badge d-none">0</span>
+            </span>
+          </button>
+          <span class="ctrl-label">Chat</span>
+        </div>
+      </div>
+
       <!-- Right: Leave -->
       <div class="ctrl-section ctrl-right">
         <div class="ctrl-btn-wrap">
@@ -213,6 +225,20 @@
       </div>
     </div>
 
+    <!-- Chat Panel -->
+    <div id="chatPanel" class="chat-panel hidden">
+      <div class="chat-header">
+        <h3 class="chat-title"><i class="bi bi-chat-dots-fill me-2"></i>In-Call Messages</h3>
+        <button id="closeChat" class="chat-close-btn">&times;</button>
+      </div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-wrapper">
+        <input id="chatInput" type="text" placeholder="Send a message to everyone..." autocomplete="off">
+        <button id="sendChatBtn" class="chat-send-btn">
+          <i class="bi bi-send-fill"></i>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Toast Notification -->

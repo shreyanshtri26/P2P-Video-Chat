@@ -5,6 +5,8 @@
 ## ✨ Features
 
 - **Google Meet-inspired Layout**: Full-viewport remote video, PIP local stream, auto-hiding controls.
+- **Integrated Video Chat**: Full real-time conversational messaging client injected securely into active rooms.
+- **Smart Focus Grid ("Switch Me")**: Expand local streams or remote components natively via point-and-click.
 - **Enhanced Stream Quality**: High-definition constraints (720p @ 30FPS) paired with echo cancellation & noise suppression.
 - **Audio Visualizers**: Real-time speaking detection with UI feedback (mic buttons + video rings).
 - **Control Suite**: Toggle camera/microphone, switch peripherals, and go fullscreen seamlessly.

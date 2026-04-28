@@ -921,15 +921,19 @@ body {
   right: 20px;
   bottom: 100px;
   width: 340px;
-  background: rgba(32, 33, 36, 0.9);
+  background: rgba(32, 33, 36, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
   border-radius: 16px;
   display: flex;
   flex-direction: column;
-  z-index: 40;
+  z-index: 9999;
   transition: transform 0.3s ease, opacity 0.3s ease;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+:fullscreen .chat-panel,
+:-webkit-full-screen .chat-panel {
+  z-index: 99999 !important;
 }
 .chat-panel.hidden {
   transform: translateX(380px);

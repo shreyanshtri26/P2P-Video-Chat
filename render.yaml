@@ -1,0 +1,11 @@
+# Render Deployment Blueprint for Voceo
+services:
+  - type: web
+    name: voceo-chat # This will give voceo-chat.onrender.com
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: ohio
+    envVars:
+      - key: PORT
+        value: "10000"

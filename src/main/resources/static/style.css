@@ -272,12 +272,73 @@ body {
   overflow: hidden;
 }
 
-/* Remote video — fills everything */
-.remote-video {
+/* ── Video Grid (multi-party) ──────────────────────────── */
+.video-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  gap: 3px;
+  background: #000;
+  z-index: 1;
+  transition: grid-template-columns 0.3s ease, grid-template-rows 0.3s ease;
+}
+
+/* 0 peers: hidden behind waiting overlay */
+.video-grid[data-peers="0"] { display: none; }
+
+/* 1 peer: full screen */
+.video-grid[data-peers="1"] {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* 2 peers: side by side */
+.video-grid[data-peers="2"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+
+/* 3 peers: 2 on top row + 1 full width bottom */
+.video-grid[data-peers="3"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.video-grid[data-peers="3"] .video-tile:last-child {
+  grid-column: 1 / -1;
+}
+
+/* Each remote tile */
+.video-tile {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+  border-radius: 4px;
+  animation: tile-in 0.35s ease;
+}
+
+@keyframes tile-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.remote-video-tile {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.tile-label {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 /* Waiting overlay */
@@ -589,12 +650,179 @@ body {
 /* ── Utility ───────────────────────────────────────────── */
 .d-none { display: none !important; }
 
+/* ============================================================
+   RESPONSIVE — TABLET (max 1024px)
+============================================================ */
+@media (max-width: 1024px) {
+  .lobby-right {
+    flex: 0 0 360px;
+    padding: 40px 28px;
+  }
+
+  .lobby-left {
+    padding: 40px 32px;
+  }
+
+  .ctrl-center { gap: 10px; }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE (max 768px)
+============================================================ */
 @media (max-width: 768px) {
-  .lobby-screen { flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
-  .lobby-left   { padding: 32px 20px; border-right: none; border-bottom: 1px solid var(--border); }
-  .lobby-right  { flex: none; width: 100%; padding: 32px 20px 48px; }
-  .local-pip    { width: 140px; bottom: 90px; }
-  .call-controls { padding: 0 16px; }
-  .ctrl-center  { gap: 8px; }
-  .ctrl-btn     { width: 44px; height: 44px; }
+
+  /* Body overflow: lobby needs scroll */
+  body { overflow-y: auto; height: auto; }
+
+  /* ── Lobby ── */
+  .lobby-screen {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .lobby-left {
+    padding: 28px 20px 20px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    gap: 16px;
+  }
+
+  .lobby-brand { margin-bottom: 0; }
+  .brand-icon  { font-size: 22px; }
+  .brand-name  { font-size: 22px; }
+
+  /* Compact preview on mobile */
+  .preview-container { max-width: 100%; border-radius: 12px; }
+
+  .preview-ctrl-btn { width: 40px; height: 40px; font-size: 16px; }
+
+  .device-selectors { max-width: 100%; gap: 10px; }
+  .device-select-group { padding: 10px 14px; }
+  .device-select { font-size: 13px; }
+
+  /* Right panel becomes full width below preview */
+  .lobby-right {
+    flex: none;
+    width: 100%;
+    padding: 24px 20px 40px;
+  }
+
+  .join-card { max-width: 100%; }
+  .join-title { font-size: 22px; }
+  .join-subtitle { margin-bottom: 24px; font-size: 13px; }
+  .join-input { font-size: 15px; }
+  .join-btn { padding: 14px; font-size: 15px; }
+  .input-wrapper { padding: 12px 16px; }
+
+  /* ── Call screen ── */
+  .call-screen { overflow: hidden; }
+
+  /* Top bar: smaller on mobile */
+  .call-topbar {
+    height: 52px;
+    padding: 0 14px;
+  }
+
+  /* Hide room label in topbar center on small screens */
+  .topbar-center { display: none; }
+
+  .brand-icon-sm { font-size: 17px; }
+  .brand-name-sm { font-size: 16px; }
+
+  .call-timer { font-size: 12px; }
+
+  /* Connection badge: hide text, keep dot only */
+  .conn-badge span#connStatus { display: none; }
+  .conn-badge { padding: 4px 8px; }
+
+  /* PIP: smaller, bottom-left to avoid overlapping controls */
+  .local-pip {
+    width: 110px;
+    bottom: auto;
+    top: 60px;
+    right: 12px;
+    left: auto;
+    border-radius: 10px;
+  }
+
+  /* Controls bar: tighter */
+  .call-controls {
+    height: 80px;
+    padding: 0 12px;
+  }
+
+  /* Hide room name text in controls left */
+  .ctrl-room-name { display: none; }
+  .ctrl-left { flex: 0; }
+  .ctrl-right { flex: 0; }
+
+  /* Center becomes the main content, takes remaining space */
+  .ctrl-center {
+    flex: 1;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  /* Buttons: touch-friendly 48px tap target */
+  .ctrl-btn { width: 48px; height: 48px; }
+  .ctrl-btn-inner { font-size: 18px; }
+
+  /* Hide labels on mobile (icons only) */
+  .ctrl-label { display: none; }
+
+  /* Toast: full width, bottom */
+  .toast-notification {
+    width: calc(100% - 32px);
+    left: 16px;
+    right: 16px;
+    transform: none;
+    bottom: 90px;
+    border-radius: 12px;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Waiting overlay text */
+  .waiting-title { font-size: 18px; }
+  .waiting-avatar { width: 72px; height: 72px; font-size: 36px; }
+}
+
+/* ============================================================
+   RESPONSIVE — SMALL PHONES (max 480px)
+============================================================ */
+@media (max-width: 480px) {
+  .lobby-left { padding: 20px 16px 16px; }
+  .lobby-right { padding: 20px 16px 32px; }
+
+  .join-title { font-size: 20px; }
+
+  /* Even smaller PIP */
+  .local-pip { width: 90px; }
+
+  /* Tighter controls */
+  .ctrl-btn { width: 44px; height: 44px; }
+  .ctrl-center { gap: 8px; }
+}
+
+/* ============================================================
+   SAFE AREA — Notch / Dynamic Island support (iOS)
+============================================================ */
+@supports (padding: max(0px)) {
+  .call-controls {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    height: calc(80px + env(safe-area-inset-bottom));
+  }
+  .call-topbar {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+  .lobby-screen {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

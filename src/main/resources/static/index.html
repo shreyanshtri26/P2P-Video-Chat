@@ -85,7 +85,7 @@
           </button>
         </div>
 
-        <p class="join-hint">Both participants must enter the same room code</p>
+        <p class="join-hint">Up to 4 people can join the same room code</p>
       </div>
     </div>
   </div>
@@ -96,8 +96,8 @@
   ══════════════════════════════════════ -->
   <div id="roomDiv" class="call-screen d-none">
 
-    <!-- Remote Video (full screen) -->
-    <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+    <!-- Remote Video Grid (populated dynamically for up to 4 peers) -->
+    <div id="videoGrid" class="video-grid" data-peers="0"></div>
 
     <!-- Waiting Overlay -->
     <div id="peerPlaceholder" class="waiting-overlay">
@@ -213,7 +213,7 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"></script>
-  <script src="client.js?v=3"></script>
+  <script src="client.js?v=4"></script>
 </body>
 
 </html>

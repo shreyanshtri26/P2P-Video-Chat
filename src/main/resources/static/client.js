@@ -1,69 +1,68 @@
 /* ============================================================
-   VOCEO — client.js
-   WebRTC signalling + Audio Analyser + Device Enum + Fullscreen
+   VOCEO — client.js   (Full-Mesh P2P, up to 4 participants)
 ============================================================ */
 
-const LOCAL_IP_ADDRESS = "192.168.1.6"; // change to your local IP
+const LOCAL_IP_ADDRESS = "192.168.1.6"; // used only in local dev
 
 // ── DOM helpers ───────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
-const btnConnect      = $("btnConnect");
-const btnToggleVideo  = $("toggleVideo");
-const btnToggleAudio  = $("toggleAudio");
-const btnFullscreen   = $("btnFullscreen");
-const btnFlip         = $("btnFlip");
-const divRoomConfig   = $("roomConfig");
-const roomDiv         = $("roomDiv");
-const roomNameInput   = $("roomName");
-const localVideo      = $("localVideo");
-const remoteVideo     = $("remoteVideo");
-const peerPlaceholder = $("peerPlaceholder");
-const audioBars       = $("audioBars");
-const localAudioRing  = $("localAudioRing");
-const callTopbar      = $("callTopbar");
-const callControls    = $("callControls");
-const callTimer       = $("callTimer");
-const callRoomLabel   = $("callRoomLabel");
-const ctrlRoomName    = $("ctrlRoomName");
-const roomLabel       = $("roomLabel");
-const connBadge       = $("connectionBadge");
-const connStatus      = $("connStatus");
-const previewVideo    = $("previewVideo");
-const previewMicIcon  = $("previewMicIcon");
-const previewCamIcon  = $("previewCamIcon");
+const btnConnect       = $("btnConnect");
+const btnToggleVideo   = $("toggleVideo");
+const btnToggleAudio   = $("toggleAudio");
+const btnFullscreen    = $("btnFullscreen");
+const btnFlip          = $("btnFlip");
+const divRoomConfig    = $("roomConfig");
+const roomDiv          = $("roomDiv");
+const roomNameInput    = $("roomName");
+const localVideo       = $("localVideo");
+const videoGrid        = $("videoGrid");
+const peerPlaceholder  = $("peerPlaceholder");
+const audioBars        = $("audioBars");
+const localAudioRing   = $("localAudioRing");
+const callTopbar       = $("callTopbar");
+const callControls     = $("callControls");
+const callTimer        = $("callTimer");
+const callRoomLabel    = $("callRoomLabel");
+const ctrlRoomName     = $("ctrlRoomName");
+const roomLabel        = $("roomLabel");
+const connBadge        = $("connectionBadge");
+const connStatus       = $("connStatus");
+const previewVideo     = $("previewVideo");
+const previewMicIcon   = $("previewMicIcon");
+const previewCamIcon   = $("previewCamIcon");
 const previewToggleMic = $("previewToggleMic");
 const previewToggleCam = $("previewToggleCam");
 const previewAudioRing = $("previewAudioRing");
-const audioSelect     = $("audioSelect");
-const videoSelect     = $("videoSelect");
+const audioSelect      = $("audioSelect");
+const videoSelect      = $("videoSelect");
 
-// ── State ─────────────────────────────────────────────────
-let remoteDescriptionPromise, roomName, localStream, remoteStream;
-let rtcPeerConnection, isCaller;
+// ── Mesh State ────────────────────────────────────────────
+const peers = new Map();   // peerId -> RTCPeerConnection
+let myId        = null;
+let roomName    = null;
+let localStream = null;
+let localMirrored = true;
+let micEnabled  = true;
+let camEnabled  = true;
+
+// ── Non-call state ────────────────────────────────────────
 let audioContext, analyser, audioData, animFrameId;
 let callStartTime, timerInterval;
 let controlsHideTimer;
-let localMirrored = true;
-let previewStream;
-let previewAudioCtx, previewAnalyser, previewAnimFrame;
-let micEnabled = true, camEnabled = true;
+let previewStream, previewAudioCtx, previewAnalyser, previewAnimFrame;
 
-// ── ICE Config ───────────────────────────────────────────
+// ── ICE Servers ───────────────────────────────────────────
 const iceServers = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
     { urls: `stun:${LOCAL_IP_ADDRESS}:3478` },
-    {
-      urls: `turn:${LOCAL_IP_ADDRESS}:3478`,
-      username: "username",
-      credential: "password"
-    }
+    { urls: `turn:${LOCAL_IP_ADDRESS}:3478`, username: "username", credential: "password" }
   ]
 };
 
-// ── Stream Constraints ───────────────────────────────────
+// ── Stream Constraints ────────────────────────────────────
 const buildConstraints = (audioDeviceId, videoDeviceId) => ({
   audio: {
     deviceId: audioDeviceId ? { exact: audioDeviceId } : undefined,
@@ -81,29 +80,136 @@ const buildConstraints = (audioDeviceId, videoDeviceId) => ({
   }
 });
 
-// ── Socket ───────────────────────────────────────────────
-// Context-aware Socket backend (Render Production vs Local Dev)
+// ── Socket (auto-detects dev vs production) ───────────────
 const isDev = window.location.port === "8080";
-const socketUrl = isDev 
-  ? `${window.location.protocol}//${window.location.hostname}:8000` 
+const socketUrl = isDev
+  ? `${window.location.protocol}//${window.location.hostname}:8000`
   : `${window.location.protocol}//${window.location.host}`;
 
 const socket = io.connect(socketUrl);
-const handleSocketEvent = (name, cb) => socket.on(name, cb);
+const on = (name, cb) => socket.on(name, cb);
+
+// ═══════════════════════════════════════════════════════════
+//  VIDEO GRID HELPERS
+// ═══════════════════════════════════════════════════════════
+
+function addVideoTile(peerId, stream) {
+  // Avoid duplicate tiles
+  if ($("tile-" + peerId)) return;
+
+  const tile = document.createElement("div");
+  tile.className = "video-tile";
+  tile.id = "tile-" + peerId;
+
+  const video = document.createElement("video");
+  video.autoplay = true;
+  video.playsInline = true;
+  video.className = "remote-video-tile";
+  video.srcObject = stream;
+
+  const label = document.createElement("div");
+  label.className = "tile-label";
+  label.textContent = "Peer";
+
+  tile.appendChild(video);
+  tile.appendChild(label);
+  videoGrid.appendChild(tile);
+  updateGrid();
+
+  peerPlaceholder.classList.add("d-none");
+  updateConnectionBadge();
+}
+
+function removeVideoTile(peerId) {
+  const tile = $("tile-" + peerId);
+  if (tile) tile.remove();
+  updateGrid();
+  if (videoGrid.children.length === 0) {
+    peerPlaceholder.classList.remove("d-none");
+  }
+  updateConnectionBadge();
+}
+
+function updateGrid() {
+  videoGrid.dataset.peers = videoGrid.children.length;
+}
+
+function updateConnectionBadge() {
+  const n = videoGrid.children.length;
+  if (n === 0) {
+    connBadge.className = "conn-badge conn-waiting";
+    connStatus.textContent = "Waiting";
+  } else {
+    connBadge.className = "conn-badge conn-connected";
+    connStatus.textContent = n === 1 ? "Connected" : `${n} peers`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PEER CONNECTION FACTORY
+// ═══════════════════════════════════════════════════════════
+
+function createPeerConnection(peerId) {
+  if (peers.has(peerId)) return peers.get(peerId);
+
+  const pc = new RTCPeerConnection(iceServers);
+  peers.set(peerId, pc);
+
+  // Add all local tracks to this connection
+  if (localStream) {
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  }
+
+  // Send ICE candidates addressed to this specific peer
+  pc.onicecandidate = e => {
+    if (e.candidate) {
+      socket.emit("candidate", {
+        type: "candidate",
+        label: e.candidate.sdpMLineIndex,
+        id: e.candidate.sdpMid,
+        candidate: e.candidate.candidate,
+        room: roomName,
+        targetId: peerId
+      });
+    }
+  };
+
+  // Incoming remote stream → create a video tile
+  pc.ontrack = e => {
+    addVideoTile(peerId, e.streams[0]);
+    if (!timerInterval) startTimer();
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === "disconnected" || pc.iceConnectionState === "failed") {
+      closePeer(peerId);
+    }
+  };
+
+  return pc;
+}
+
+function closePeer(peerId) {
+  const pc = peers.get(peerId);
+  if (pc) {
+    pc.close();
+    peers.delete(peerId);
+  }
+  removeVideoTile(peerId);
+}
 
 // ═══════════════════════════════════════════════════════════
 //  DEVICE ENUMERATION
 // ═══════════════════════════════════════════════════════════
+
 async function enumerateDevices() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const audios  = devices.filter(d => d.kind === "audioinput");
-    const videos  = devices.filter(d => d.kind === "videoinput");
-
+    const audios = devices.filter(d => d.kind === "audioinput");
+    const videos = devices.filter(d => d.kind === "videoinput");
     audioSelect.innerHTML = audios.map((d, i) =>
       `<option value="${d.deviceId}">${d.label || `Microphone ${i + 1}`}</option>`
     ).join("") || `<option value="">Default Microphone</option>`;
-
     videoSelect.innerHTML = videos.map((d, i) =>
       `<option value="${d.deviceId}">${d.label || `Camera ${i + 1}`}</option>`
     ).join("") || `<option value="">Default Camera</option>`;
@@ -115,15 +221,15 @@ async function enumerateDevices() {
 // ═══════════════════════════════════════════════════════════
 //  LOBBY PREVIEW
 // ═══════════════════════════════════════════════════════════
+
 async function startPreview() {
   try {
-    previewStream = await navigator.mediaDevices.getUserMedia(buildConstraints(
-      audioSelect.value,
-      videoSelect.value
-    ));
+    previewStream = await navigator.mediaDevices.getUserMedia(
+      buildConstraints(audioSelect.value, videoSelect.value)
+    );
     previewVideo.srcObject = previewStream;
     startPreviewAudioAnalyser(previewStream);
-    await enumerateDevices(); // labels now available after permission granted
+    await enumerateDevices();
   } catch (err) {
     console.warn("Preview failed:", err);
   }
@@ -137,32 +243,27 @@ function stopPreview() {
   cancelAnimationFrame(previewAnimFrame);
 }
 
-// Re-acquire preview when device selection changes
 audioSelect.addEventListener("change", () => { stopPreview(); startPreview(); });
 videoSelect.addEventListener("change", () => { stopPreview(); startPreview(); });
 
-// Pre-join mic/cam toggles
 previewToggleMic.addEventListener("click", () => {
   micEnabled = !micEnabled;
-  if (previewStream) {
-    previewStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-  }
+  previewStream?.getAudioTracks().forEach(t => t.enabled = micEnabled);
   previewToggleMic.classList.toggle("muted", !micEnabled);
   previewMicIcon.className = micEnabled ? "bi bi-mic-fill" : "bi bi-mic-mute-fill";
 });
 
 previewToggleCam.addEventListener("click", () => {
   camEnabled = !camEnabled;
-  if (previewStream) {
-    previewStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-  }
+  previewStream?.getVideoTracks().forEach(t => t.enabled = camEnabled);
   previewToggleCam.classList.toggle("muted", !camEnabled);
   previewCamIcon.className = camEnabled ? "bi bi-camera-video-fill" : "bi bi-camera-video-off-fill";
 });
 
 // ═══════════════════════════════════════════════════════════
-//  AUDIO ANALYSER
+//  AUDIO ANALYSERS
 // ═══════════════════════════════════════════════════════════
+
 function startPreviewAudioAnalyser(stream) {
   cancelAnimationFrame(previewAnimFrame);
   if (previewAudioCtx) previewAudioCtx.close();
@@ -172,7 +273,6 @@ function startPreviewAudioAnalyser(stream) {
   previewAnalyser.fftSize = 256;
   src.connect(previewAnalyser);
   const data = new Uint8Array(previewAnalyser.frequencyBinCount);
-
   const loop = () => {
     previewAnimFrame = requestAnimationFrame(loop);
     previewAnalyser.getByteFrequencyData(data);
@@ -199,18 +299,14 @@ function startCallAudioAnalyser(stream) {
     animFrameId = requestAnimationFrame(loop);
     analyser.getByteFrequencyData(audioData);
     const vol = audioData.reduce((a, b) => a + b, 0) / audioData.length;
-    const isSpeaking = vol > 10;
-
-    // Update mic button audio bars
-    audioBars.classList.toggle("visible", isSpeaking && micEnabled);
-    if (isSpeaking) {
+    const speaking = vol > 10 && micEnabled;
+    audioBars.classList.toggle("visible", speaking);
+    localAudioRing.classList.toggle("speaking", speaking);
+    if (speaking) {
       ab1.style.height = Math.max(3, (audioData[10] / 255) * 14) + "px";
       ab2.style.height = Math.max(3, (audioData[20] / 255) * 14) + "px";
       ab3.style.height = Math.max(3, (audioData[30] / 255) * 14) + "px";
     }
-
-    // Speaking ring on PIP
-    localAudioRing.classList.toggle("speaking", isSpeaking && micEnabled);
   };
   loop();
 }
@@ -218,32 +314,35 @@ function startCallAudioAnalyser(stream) {
 // ═══════════════════════════════════════════════════════════
 //  AUTO-HIDE CONTROLS
 // ═══════════════════════════════════════════════════════════
+
 function showControls() {
   callTopbar.classList.remove("hidden");
   callControls.classList.remove("hidden");
   clearTimeout(controlsHideTimer);
-  controlsHideTimer = setTimeout(hideControls, 3500);
-}
-
-function hideControls() {
-  callTopbar.classList.add("hidden");
-  callControls.classList.add("hidden");
+  controlsHideTimer = setTimeout(() => {
+    callTopbar.classList.add("hidden");
+    callControls.classList.add("hidden");
+  }, 3500);
 }
 
 document.addEventListener("mousemove", () => {
   if (!roomDiv.classList.contains("d-none")) showControls();
 });
+document.addEventListener("touchstart", () => {
+  if (!roomDiv.classList.contains("d-none")) showControls();
+}, { passive: true });
 
 // ═══════════════════════════════════════════════════════════
 //  CALL TIMER
 // ═══════════════════════════════════════════════════════════
+
 function startTimer() {
+  if (timerInterval) return;
   callStartTime = Date.now();
   timerInterval = setInterval(() => {
     const s = Math.floor((Date.now() - callStartTime) / 1000);
-    const m = Math.floor(s / 60);
+    const mm = String(Math.floor(s / 60)).padStart(2, "0");
     const ss = String(s % 60).padStart(2, "0");
-    const mm = String(m).padStart(2, "0");
     callTimer.textContent = `${mm}:${ss}`;
   }, 1000);
 }
@@ -251,40 +350,39 @@ function startTimer() {
 // ═══════════════════════════════════════════════════════════
 //  FULLSCREEN
 // ═══════════════════════════════════════════════════════════
-btnFullscreen.addEventListener("click", toggleFullscreen);
 
-function toggleFullscreen() {
-  const fsIcon = $("fullscreenIcon");
+btnFullscreen.addEventListener("click", () => {
+  const icon = $("fullscreenIcon");
   if (!document.fullscreenElement) {
-    roomDiv.requestFullscreen().catch(err => console.warn("FS:", err));
-    fsIcon.className = "bi bi-fullscreen-exit";
+    roomDiv.requestFullscreen().catch(console.warn);
+    icon.className = "bi bi-fullscreen-exit";
   } else {
     document.exitFullscreen();
-    fsIcon.className = "bi bi-fullscreen";
+    icon.className = "bi bi-fullscreen";
   }
-}
+});
 
 document.addEventListener("fullscreenchange", () => {
-  const fsIcon = $("fullscreenIcon");
   if (!document.fullscreenElement) {
-    fsIcon.className = "bi bi-fullscreen";
+    $("fullscreenIcon").className = "bi bi-fullscreen";
   }
 });
 
 // ═══════════════════════════════════════════════════════════
-//  FLIP LOCAL VIDEO
+//  FLIP
 // ═══════════════════════════════════════════════════════════
+
 btnFlip.addEventListener("click", () => {
   localMirrored = !localMirrored;
   localVideo.style.transform = localMirrored ? "scaleX(-1)" : "scaleX(1)";
 });
 
 // ═══════════════════════════════════════════════════════════
-//  MIC / CAM TOGGLE (In-call)
+//  MIC / CAM TOGGLE
 // ═══════════════════════════════════════════════════════════
+
 function toggleTrack(type) {
   if (!localStream) return;
-
   const track = type === "video"
     ? localStream.getVideoTracks()[0]
     : localStream.getAudioTracks()[0];
@@ -297,14 +395,12 @@ function toggleTrack(type) {
     micEnabled = enabled;
     btnToggleAudio.className = `ctrl-btn ${enabled ? "ctrl-active" : "ctrl-muted"}`;
     $("audioIcon").className = enabled ? "bi bi-mic-fill" : "bi bi-mic-mute-fill";
-    showToast(enabled ? "Microphone on" : "Microphone muted",
-              enabled ? "bi-mic-fill" : "bi-mic-mute-fill");
+    showToast(enabled ? "Microphone on" : "Microphone muted", enabled ? "bi-mic-fill" : "bi-mic-mute-fill");
   } else {
     camEnabled = enabled;
     btnToggleVideo.className = `ctrl-btn ${enabled ? "ctrl-active" : "ctrl-muted"}`;
     $("videoIcon").className = enabled ? "bi bi-camera-video-fill" : "bi bi-camera-video-off-fill";
-    showToast(enabled ? "Camera on" : "Camera off",
-              enabled ? "bi-camera-video-fill" : "bi-camera-video-off-fill");
+    showToast(enabled ? "Camera on" : "Camera off", enabled ? "bi-camera-video-fill" : "bi-camera-video-off-fill");
   }
 }
 
@@ -314,6 +410,7 @@ btnToggleVideo.addEventListener("click", () => toggleTrack("video"));
 // ═══════════════════════════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════════════════════════
+
 let toastTimer;
 function showToast(msg, icon = "bi-info-circle") {
   const t = $("toast");
@@ -325,19 +422,39 @@ function showToast(msg, icon = "bi-info-circle") {
 }
 
 // ═══════════════════════════════════════════════════════════
+//  ACQUIRE STREAM
+// ═══════════════════════════════════════════════════════════
+
+async function acquireStream() {
+  if (localStream) return; // already acquired
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia(
+      buildConstraints(audioSelect.value, videoSelect.value)
+    );
+    localVideo.srcObject = localStream;
+    localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+    localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
+    if (!micEnabled) btnToggleAudio.className = "ctrl-btn ctrl-muted";
+    if (!camEnabled) btnToggleVideo.className = "ctrl-btn ctrl-muted";
+    startCallAudioAnalyser(localStream);
+  } catch (e) {
+    showToast("Camera/Mic access denied", "bi-exclamation-circle");
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 //  JOIN
 // ═══════════════════════════════════════════════════════════
-btnConnect.onclick = async () => {
+
+btnConnect.onclick = () => {
   const val = roomNameInput.value.trim();
   if (!val) { showToast("Please enter a room name", "bi-exclamation-circle"); return; }
-
   roomName = val;
   callRoomLabel.textContent = roomName;
-  ctrlRoomName.textContent = roomName;
-  roomLabel.textContent = roomName;
-
-  stopPreview(); // stop preview before joining
-
+  ctrlRoomName.textContent  = roomName;
+  roomLabel.textContent     = roomName;
+  stopPreview();
   socket.emit("joinRoom", roomName);
   divRoomConfig.classList.add("d-none");
   roomDiv.classList.remove("d-none");
@@ -345,156 +462,122 @@ btnConnect.onclick = async () => {
 };
 
 // ═══════════════════════════════════════════════════════════
-//  SIGNALLING EVENTS
+//  SIGNALLING — MESH EVENTS
 // ═══════════════════════════════════════════════════════════
-async function acquireStream() {
-  const constraints = buildConstraints(audioSelect.value, videoSelect.value);
-  localStream = await navigator.mediaDevices.getUserMedia(constraints);
-  localVideo.srcObject = localStream;
 
-  // Apply pre-join toggle state
-  localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
-  localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-  if (!micEnabled) btnToggleAudio.className = "ctrl-btn ctrl-muted";
-  if (!camEnabled) btnToggleVideo.className = "ctrl-btn ctrl-muted";
-
-  startCallAudioAnalyser(localStream);
-}
-
-handleSocketEvent("created", async () => {
-  try {
-    await acquireStream();
-    isCaller = true;
-  } catch (e) { showToast("Camera/Mic access denied"); console.error(e); }
+// First person in the room
+on("created", async (clientId) => {
+  myId = clientId;
+  await acquireStream();
+  showToast("Room created — waiting for peers", "bi-shield-check");
 });
 
-handleSocketEvent("joined", async () => {
-  try {
-    await acquireStream();
-    socket.emit("ready", roomName);
-  } catch (e) { showToast("Camera/Mic access denied"); console.error(e); }
-});
+// Subsequent joiners receive their own ID + list of who's already here
+on("joined", async (data) => {
+  myId = data.myId;
+  await acquireStream();
 
-handleSocketEvent("candidate", e => {
-  if (!rtcPeerConnection) return;
-  const candidate = new RTCIceCandidate({ sdpMLineIndex: e.label, candidate: e.candidate });
-  if (remoteDescriptionPromise) {
-    remoteDescriptionPromise
-      .then(() => candidate && rtcPeerConnection.addIceCandidate(candidate))
-      .catch(err => console.warn("ICE candidate error:", err));
-  }
-});
-
-handleSocketEvent("ready", () => {
-  if (!isCaller) return;
-  rtcPeerConnection = newPeerConnection();
-  localStream.getTracks().forEach(t => rtcPeerConnection.addTrack(t, localStream));
-  rtcPeerConnection.createOffer()
-    .then(sd => {
-      rtcPeerConnection.setLocalDescription(sd);
-      socket.emit("offer", { type: "offer", sdp: sd, room: roomName });
-    })
-    .catch(console.error);
-});
-
-handleSocketEvent("offer", e => {
-  if (isCaller) return;
-  rtcPeerConnection = newPeerConnection();
-  localStream.getTracks().forEach(t => rtcPeerConnection.addTrack(t, localStream));
-  if (rtcPeerConnection.signalingState === "stable") {
-    remoteDescriptionPromise = rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(e));
-    remoteDescriptionPromise
-      .then(() => rtcPeerConnection.createAnswer())
-      .then(sd => {
-        rtcPeerConnection.setLocalDescription(sd);
-        socket.emit("answer", { type: "answer", sdp: sd, room: roomName });
-      })
-      .catch(console.error);
-  }
-});
-
-handleSocketEvent("answer", e => {
-  if (isCaller && rtcPeerConnection.signalingState === "have-local-offer") {
-    remoteDescriptionPromise = rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(e));
-    remoteDescriptionPromise.catch(console.error);
-  }
-});
-
-handleSocketEvent("userDisconnected", () => {
-  remoteVideo.srcObject = null;
-  isCaller = true;
-  peerPlaceholder.classList.remove("d-none");
-  connBadge.className = "conn-badge conn-waiting";
-  connStatus.textContent = "Waiting";
-  clearInterval(timerInterval);
-  callTimer.textContent = "00:00";
-  showToast("Peer disconnected", "bi-person-x-fill");
-});
-
-handleSocketEvent("setCaller", id => { isCaller = socket.id === id; });
-
-handleSocketEvent("full", () => {
-  showToast("Room is full!", "bi-exclamation-triangle-fill");
-  setTimeout(() => window.location.reload(), 2000);
-});
-
-// ── Peer Connection factory ──────────────────────────────
-function newPeerConnection() {
-  const pc = new RTCPeerConnection(iceServers);
-  pc.onicecandidate = e => {
-    if (e.candidate) {
-      socket.emit("candidate", {
-        type: "candidate",
-        label: e.candidate.sdpMLineIndex,
-        id: e.candidate.sdpMid,
-        candidate: e.candidate.candidate,
-        room: roomName
-      });
+  // The new joiner always initiates offers to every existing peer
+  for (const peerId of data.peers) {
+    const pc = createPeerConnection(peerId);
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit("offer", { type: "offer", sdp: offer, room: roomName, targetId: peerId });
+    } catch (e) {
+      console.error("Error creating offer to", peerId, e);
     }
-  };
-  pc.ontrack = onAddStream;
-  return pc;
-}
+  }
+});
 
-function onAddStream(e) {
-  remoteVideo.srcObject = e.streams[0];
-  peerPlaceholder.classList.add("d-none");
-  connBadge.className = "conn-badge conn-connected";
-  connStatus.textContent = "Connected";
-  startTimer();
-  showControls();
-  showToast("Peer joined the room", "bi-person-check-fill");
-}
+// Existing peer is told a newcomer joined — they wait for that peer's offer
+on("peerJoined", (newPeerId) => {
+  showToast("A new peer is joining…", "bi-person-plus-fill");
+  // The peer connection for newPeerId will be created when we receive their offer
+});
+
+// Incoming offer from a peer that just joined
+on("offer", async (payload) => {
+  const fromId = payload.fromId;
+  const pc = createPeerConnection(fromId);
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit("answer", { type: "answer", sdp: answer, room: roomName, targetId: fromId });
+  } catch (e) {
+    console.error("Error handling offer from", fromId, e);
+  }
+});
+
+// Incoming answer from a peer we offered to
+on("answer", async (payload) => {
+  const fromId = payload.fromId;
+  const pc = peers.get(fromId);
+  if (pc && pc.signalingState === "have-local-offer") {
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    } catch (e) {
+      console.error("Error handling answer from", fromId, e);
+    }
+  }
+});
+
+// ICE candidate from a specific peer
+on("candidate", (payload) => {
+  const fromId = payload.fromId;
+  const pc = peers.get(fromId);
+  if (pc) {
+    const candidate = new RTCIceCandidate({
+      sdpMLineIndex: payload.label,
+      candidate: payload.candidate
+    });
+    pc.addIceCandidate(candidate).catch(e => console.warn("ICE candidate error:", e));
+  }
+});
+
+// A peer disconnected — close their connection and remove their tile
+on("userDisconnected", (peerId) => {
+  closePeer(peerId);
+  showToast("A peer left the room", "bi-person-dash-fill");
+  if (peers.size === 0) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    callTimer.textContent = "00:00";
+  }
+});
+
+// Room is full
+on("full", () => {
+  showToast("Room is full (max 4 people)", "bi-exclamation-triangle-fill");
+  setTimeout(() => window.location.reload(), 2500);
+});
 
 // ═══════════════════════════════════════════════════════════
 //  DRAGGABLE PIP
 // ═══════════════════════════════════════════════════════════
+
 (function makeDraggable() {
   const pip = $("localPip");
-  let ox, oy, sx, sy, dragging = false;
+  let dragging = false, ox, oy;
 
   pip.addEventListener("mousedown", e => {
     dragging = true;
     const r = pip.getBoundingClientRect();
     ox = e.clientX - r.left;
     oy = e.clientY - r.top;
-    sx = r.left;
-    sy = r.top;
     pip.style.cursor = "grabbing";
     e.preventDefault();
   });
 
   document.addEventListener("mousemove", e => {
     if (!dragging) return;
-    const x = e.clientX - ox;
-    const y = e.clientY - oy;
-    // Constrain within viewport
-    const maxX = window.innerWidth  - pip.offsetWidth;
-    const maxY = window.innerHeight - pip.offsetHeight;
+    const x = Math.max(0, Math.min(e.clientX - ox, window.innerWidth  - pip.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - oy, window.innerHeight - pip.offsetHeight));
     pip.style.right  = "auto";
     pip.style.bottom = "auto";
-    pip.style.left   = Math.max(0, Math.min(x, maxX)) + "px";
-    pip.style.top    = Math.max(0, Math.min(y, maxY)) + "px";
+    pip.style.left = x + "px";
+    pip.style.top  = y + "px";
   });
 
   document.addEventListener("mouseup", () => {
@@ -506,9 +589,9 @@ function onAddStream(e) {
 // ═══════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════
+
 window.addEventListener("DOMContentLoaded", () => {
   startPreview();
-  // Enter key on room input
   roomNameInput.addEventListener("keydown", e => {
     if (e.key === "Enter") btnConnect.click();
   });

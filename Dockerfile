@@ -6,7 +6,7 @@ COPY src/ /app/src/
 RUN mvn clean package -DskipTests
 
 # Step : Package image
-FROM openjdk:11-jdk-slim
+FROM eclipse-temurin:11-jdk
 
 # Install Nginx and gettext (for envsubst)
 RUN apt-get update && apt-get install -y nginx gettext && rm -rf /var/lib/apt/lists/*

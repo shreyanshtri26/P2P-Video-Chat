@@ -82,7 +82,13 @@ const buildConstraints = (audioDeviceId, videoDeviceId) => ({
 });
 
 // ── Socket ───────────────────────────────────────────────
-const socket = io.connect(`http://${LOCAL_IP_ADDRESS}:8000`);
+// Context-aware Socket backend (Render Production vs Local Dev)
+const isDev = window.location.port === "8080";
+const socketUrl = isDev 
+  ? `${window.location.protocol}//${window.location.hostname}:8000` 
+  : `${window.location.protocol}//${window.location.host}`;
+
+const socket = io.connect(socketUrl);
 const handleSocketEvent = (name, cb) => socket.on(name, cb);
 
 // ═══════════════════════════════════════════════════════════

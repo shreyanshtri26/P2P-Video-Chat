@@ -439,7 +439,7 @@ function startTimer() {
 btnFullscreen.addEventListener("click", () => {
   const icon = $("fullscreenIcon");
   if (!document.fullscreenElement) {
-    roomDiv.requestFullscreen().catch(console.warn);
+    document.documentElement.requestFullscreen().catch(console.warn);
     icon.className = "bi bi-fullscreen-exit";
   } else {
     document.exitFullscreen();
@@ -472,7 +472,13 @@ let screenStream = null;
 btnScreenShare.addEventListener("click", async () => {
   if (!screenSharing) {
     try {
-      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 }
+        }
+      });
       const screenTrack = screenStream.getVideoTracks()[0];
 
       peers.forEach((pc, peerId) => {
@@ -871,6 +877,29 @@ on("chatMessage", (payload) => {
     unreadCount++;
     chatBadge.textContent = unreadCount;
     chatBadge.classList.remove("d-none");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+
+document.addEventListener("keydown", (e) => {
+  if (document.activeElement === $("chatInput") || document.activeElement === $("roomName")) return;
+
+  const k = e.key.toLowerCase();
+  if (k === 'm') {
+    toggleTrack("audio");
+  } else if (k === 'v') {
+    toggleTrack("video");
+  } else if (k === 'f') {
+    $("btnFullscreen").click();
+  } else if (k === 'c') {
+    $("toggleChat").click();
+  } else if (k === 's') {
+    $("btnScreenShare").click();
+  } else if (k === 'l') {
+    window.location.reload();
   }
 });
 
